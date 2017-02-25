@@ -65,8 +65,17 @@ replace pt_irreg=1 if pubtype=="Scientific Integrity Review"
 replace pt_irreg=1 if pubtype=="Government Publications"
 replace pt_irreg=1 if pubtype=="Dataset"
 
+drop pubtype
+tempfile hold
+save `hold', replace
+
+cd D:\Research\RAWDATA\MEDLINE\2016\Parsed\PubTypes
+import delimited "medline16_pubtypes.txt", clear delimiter(tab) varnames(1)
+drop pubtype
+merge m:1 ui using `hold'
 
 collapse (max) pt_*, by(filenum pmid version) fast
+
 label var pt_ja "Journal Article"
 label var pt_rsnnonus "Research Support, Non-U.S. Gov't"
 label var pt_rev "Review"

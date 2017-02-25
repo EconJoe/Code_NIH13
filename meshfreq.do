@@ -1,22 +1,18 @@
 
 cd D:\Research\RAWDATA\MEDLINE\2016\Parsed\MeSH
-import delimited "medline16_mesh.txt", clear delimiter(tab) varnames(1)
-keep filenum pmid version v5 v6 mesh ui
-rename mesh type
-rename ui meshgroup
-rename v5 ui
-rename v6 majortopic
+import delimited "medline16_mesh_ui.txt", clear delimiter(tab) varnames(1)
+keep filenum pmid version ui majortopic type meshgroup
 
 cd D:\Research\RAWDATA\MEDLINE\2016\Processed
 merge m:1 filenum pmid version using medline16_dates_clean
-
-set more off
 
 gen major=0
 replace major=1 if majortopic=="Y"
 drop majortopic
 by pmid version meshgroup, sort: egen groupmajor=total(major)
 keep pmid version ui year type major
+
+set more off
 
 gen meshcount_total_all=1
 gen meshcount_desc_all = (type=="Descriptor")

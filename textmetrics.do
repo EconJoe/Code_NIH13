@@ -25,6 +25,7 @@ global meshtree "B:\Research\RAWDATA\MeSH\2014\Parsed"
 cd $processed
 use medline16_ngrams_id, clear
 merge 1:1 ngramid using medline16_ngrams_mentions
+drop _merge
 keep ngram ngramid mentions_bt
 merge 1:1 ngramid using medline16_ngrams_vintage
 drop _merge
@@ -112,8 +113,8 @@ foreach h in `initialfiles' {
 *********************************************************************************
 
 
-	* Compute the age of each ngram
-	gen age=year-vintage
+* Compute the age of each ngram
+gen age=year-vintage
 
 *************************************************************************************
 *************************************************************************************
