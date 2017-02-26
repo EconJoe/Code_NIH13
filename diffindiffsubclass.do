@@ -29,6 +29,133 @@ predict pr, pr
 gen odds=pr/(1-pr)
 gen lodds=ln(odds)
 
+
+* Initial values
+local strata=1
+local exit="No"
+local iter=1
+gen hold_stratum=`strata'
+gen F_current=.
+
+* Stopping rules
+local F_thresh=5
+local N_thresh=100
+
+set more off
+while ("`exit'"=="No") {
+
+	display in red "Iteration `iter'"
+	local iter=`iter'+1
+
+	* Perform One-Way ANOVA tests WITHIN each stratum
+	gen hold_F=.
+	set more off
+	forvalues i=1/`strata' {
+		qui oneway lodds tgroup if hold_stratum==`i'
+		local F=`r(F)'
+		replace hold_F=`F' if hold_stratum==`i'
+	}
+	
+	* Identify the strata that will be split
+	* Compute Potential Split value for each stratum. 
+	* This is just the median of the estimated propensity score
+	* Split the strata that need to be split
+	gen hold_split=(hold_F > `F_thresh')
+	display in red "1st"
+	*tab hold_stratum hold_split
+	by hold_stratum, sort: egen hold_splitvalue = median(pr)
+
+	* The zeros denote the strata that will not be split BECAUSE THEY SATISFY THE HOMOG REQUIRIEMENT. 
+	* 1 2 denote how the strata to be split will POTENTIALLY be split. We still neeed to check the minimum observation requirement
+	gen hold_stratum_new = 0
+	replace hold_stratum_new=1 if pr<=hold_splitvalue & hold_split==1
+	replace hold_stratum_new=2 if pr>hold_splitvalue & hold_split==1
+	egen stratum_current = group(hold_stratum hold_stratum_new)
+	* Check that the minium number of observations in each of 4 groups is included in each new strata
+	* If any of the 4 groups fall below the threshold, the strata is not split
+	qui tab tgroup, gen(hold_tg_)
+	forvalues i=1/4 {
+		by stratum_current, sort: egen hold_tot_tg`i'=total(hold_tg_`i')
+		replace hold_split=0 if hold_tot_tg`i'<`N_thresh'
+	}
+	display in red "2nd"
+	*tab hold_stratum hold_split
+	* The zeros denote the strata that will not be split. BECAUSE THEY DON'T HAVE THE MINIMIMUM NUMBER OF OBSERVATIONS
+	* 1 2 denote how the strata to be split will ACTUALLY be split.
+	drop hold_stratum_new stratum_current
+	gen hold_stratum_new = 0
+	replace hold_stratum_new=1 if pr<=hold_splitvalue & hold_split==1
+	replace hold_stratum_new=2 if pr>hold_splitvalue & hold_split==1
+
+	* Identify new strata
+	egen stratum_current = group(hold_stratum hold_stratum_new)
+
+	* Impose stopping rule. If no strata are identified to be split
+	tab hold_split
+	qui su hold_split
+	local min=`r(min)'
+	local max=`r(max)'
+	if (`min'==0 & `max'==0) {
+		local exit="Yes"
+	}
+	su hold_F stratum_current hold_tot_tg*
+	replace F_current=hold_F
+	drop hold_*
+	rename stratum_current hold_stratum
+
+	qui su hold_stratum
+	local strata=`r(max)'
+	*if (`strata'==115) {
+	*	local exit="Yes"
+	*}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cd D:\Research\Projects\NIHMandate\NIH14\Data
+use estsample, clear
+keep if year>=2000 & year<=2013
+
+gen ta=1-oa
+gen lsim=ln(similarityscore)
+gen lval=ln(validsimilar_total)
+gen post=(year>2008)
+gen treated=(nih==1 & post==1)
+gen nottreated=1-treated
+
+gen tgroup=.
+replace tgroup=1 if nih==1 & post==0
+replace tgroup=2 if nih==1 & post==1
+replace tgroup=3 if nih==0 & post==0
+replace tgroup=4 if nih==0 & post==1
+
+local backcites "bc_count bc_oa_count"
+local ment "ment_0_both_001 ment_5_both_001 wordcount_both"
+local mesh "count_desc count_qual"
+local author "authortotal"
+local pubtype "pt_*"
+local meshaug1 "mean_arttot_meshvintage mean_arttot_mc_d_all mean_arttot_cum_mc_d_all"
+
+local spec `"`backcites' `ment' `mesh' `author' `pubtype' `meshaug1'"'
+logit treated `spec'
+predict pr, pr
+gen odds=pr/(1-pr)
+gen lodds=ln(odds)
+
 * Initial values
 local strata=1
 local exit="No"
@@ -185,6 +312,7 @@ gen parmseq=.
 save coeffs_subclass, replace
 
 use temp, clear
+rename hold_stratum stratum
 tempfile hold
 save `hold', replace
 
@@ -198,7 +326,7 @@ local meshaug1 "mean_arttot_meshvintage mean_arttot_mc_d_all mean_arttot_cum_mc_
 local spec `"`backcites' `ment' `mesh' `author' `pubtype' `meshaug1'"'
 
 set more off
-forvalues i=1/115 {
+forvalues i=1/2423 {
 	
 	use `hold' if stratum==`i', clear
 	su ta if stratum==`i'

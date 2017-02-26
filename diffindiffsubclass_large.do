@@ -80,7 +80,85 @@ while ("`exit'"=="No") {
 
 	qui su hold_stratum
 	local strata=`r(max)'
-	*if (`strata'==115) {
-    *	local exit="Yes"
-	*}
+	if (`strata'==370) {
+    	local exit="Yes"
+	}
 }
+
+
+
+save subclass_large, replace
+
+use subclass_large, clear
+
+reg dat_pr
+predict res, r
+twoway (kdensity res if nih==1 & post==1) ///
+       (kdensity res if nih==1 & post==0) ///
+	   (kdensity res if nih==0 & post==1) ///
+	   (kdensity res if nih==0 & post==0), ///
+	   legend(order(1 "Treated After" 2 "Treated Before" 3 "Control After" 4 "Control Before"))
+
+areg dat_pr, absorb(hold_stratum)
+predict res_fe, r
+
+twoway (kdensity res_fe if nih==1 & post==1) ///
+       (kdensity res_fe if nih==1 & post==0) ///
+	   (kdensity res_fe if nih==0 & post==1) ///
+	   (kdensity res_fe if nih==0 & post==0), ///
+	   legend(order(1 "Treated After" 2 "Treated Before" 3 "Control After" 4 "Control Before"))
+
+
+
+
+clear
+gen parmseq=.
+save coeffs_subclass_large, replace
+
+use subclass_large, clear
+rename hold_stratum stratum
+tempfile hold
+save `hold', replace
+
+local backcites "bc_count bc_oa_count"
+local ment "ment_0_both_001 ment_5_both_001 wordcount_both"
+local mesh "count_desc count_qual"
+local author "authortotal"
+local pubtype "pt_*"
+local meshaug1 "mean_arttot_meshvintage mean_arttot_mc_d_all mean_arttot_cum_mc_d_all"
+
+local spec `"`backcites' `ment' `mesh' `author' `pubtype' `meshaug1'"'
+
+set more off
+forvalues i=1/370 {
+	
+	use `hold' if stratum==`i', clear
+	su ta if stratum==`i'
+	local obs=`r(N)'
+	parmby "reg ta i.nih##i.post i.year `spec' if stratum==`i', cluster(ui4)", norestore
+	*local att=_b[1.nih#1.post]
+	gen obs=`obs'
+	gen stratum=`i'
+	
+	append using coeffs_subclass_large
+	save coeffs_subclass_large, replace
+}
+
+use coeffs_subclass_large, clear
+keep if parm=="1.nih#1.post"
+egen obs_total=total(obs)
+gen weight=obs/obs_total
+gen coeffprod=weight*estimate
+gen var=stderr^2
+gen weight2=weight^2
+gen varprod=weight2*var
+egen att=total(coeffprod)
+egen variance=total(varprod)
+gen sd=sqrt(variance)
+gen t_att=att/sd
+
+twoway (connected estimate stratum), ///
+       yline(0)
+
+
+
