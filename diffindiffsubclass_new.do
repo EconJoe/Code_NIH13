@@ -36,9 +36,6 @@ save temp, replace
 
 
 
-
-
-
 use temp, clear
 
 * Initial values
@@ -85,6 +82,19 @@ while ("`exit'"=="No") {
 	gen hold_stratum_test=.
 	replace hold_stratum_test=1 if pr<=hold_splitvalue & hold_split_homog==1
 	replace hold_stratum_test=2 if pr>hold_splitvalue & hold_split_homog==1
+	***
+	* This handles edge cases when the choice of equality matters. Can happen when the median (split value) equals the min or max.
+	* Without this, all observations can be assigned to the same stratum in an infinite loop.
+	qui su hold_stratum_test
+	local min=`r(min)'
+	local max=`r(max)'
+	if (`min'==1 & `max'==1) {
+		drop hold_stratum_test
+		gen hold_stratum_test=.
+		replace hold_stratum_test=1 if pr<hold_splitvalue & hold_split_homog==1
+		replace hold_stratum_test=2 if pr>=hold_splitvalue & hold_split_homog==1
+	}
+	***
 	qui tab tgroup, gen(hold_tg_)
 	gen hold_split_minN=1
 	forvalues i=1/4 {
@@ -141,6 +151,100 @@ while ("`exit'"=="No") {
 		save split, replace
 	}
 }
+
+erase split.dta
+
+
+use nosplit, clear
+
+reg pr
+predict res, r
+twoway (kdensity res if nih==1 & post==1) ///
+       (kdensity res if nih==1 & post==0) ///
+	   (kdensity res if nih==0 & post==1) ///
+	   (kdensity res if nih==0 & post==0), ///
+	   legend(order(1 "Treated After" 2 "Treated Before" 3 "Control After" 4 "Control Before"))
+
+areg pr, absorb(stratum_global)
+predict res_fe, r
+
+twoway (kdensity res_fe if nih==1 & post==1) ///
+       (kdensity res_fe if nih==1 & post==0) ///
+	   (kdensity res_fe if nih==0 & post==1) ///
+	   (kdensity res_fe if nih==0 & post==0), ///
+	   legend(order(1 "Treated After" 2 "Treated Before" 3 "Control After" 4 "Control Before"))
+
+
+
+
+clear
+gen parmseq=.
+save coeffs_subclass, replace
+
+use nosplit, clear
+gen trimmed=(pr>0.90 | pr<0.10)
+drop if trimmed==1
+collapse (mean) pr, by(stratum_global)
+sort pr
+gen stratum=_n
+twoway(connected pr stratum)
+merge 1:m stratum_global using nosplit
+drop if _merge==2
+drop _merge
+
+su stratum
+local strata_max=`r(max)'
+tempfile hold
+save `hold', replace
+
+local backcites "bc_count bc_oa_count"
+local ment "ment_0_both_001 ment_5_both_001 wordcount_both"
+local mesh "count_desc count_qual"
+local author "authortotal"
+local pubtype "pt_*"
+local meshaug1 "mean_arttot_meshvintage mean_arttot_mc_d_all mean_arttot_cum_mc_d_all"
+
+local spec `"`backcites' `ment' `mesh' `author' `pubtype' `meshaug1'"'
+
+set more off
+forvalues i=1/`strata_max' {
+	
+	use `hold' if stratum==`i', clear
+	su ta if stratum==`i'
+	local obs=`r(N)'
+	parmby "reg ta i.nih##i.post i.year `spec' if stratum==`i', cluster(ui4)", norestore
+	*local att=_b[1.nih#1.post]
+	gen obs=`obs'
+	gen stratum=`i'
+	
+	append using coeffs_subclass
+	save coeffs_subclass, replace
+}
+
+use coeffs_subclass, clear
+keep if parm=="1.nih#1.post"
+egen obs_total=total(obs)
+gen weight=obs/obs_total
+gen coeffprod=weight*estimate
+gen var=stderr^2
+gen weight2=weight^2
+gen varprod=weight2*var
+egen att=total(coeffprod)
+egen variance=total(varprod)
+gen sd=sqrt(variance)
+gen t_att=att/sd
+
+su att
+local att=`r(mean)'
+gen upper95=att+2*sd
+gen lower95=att-2*sd
+su upper95
+local upper95=`r(mean)'
+su lower95
+local lower95=`r(mean)'
+
+twoway (connected estimate stratum), ///
+       yline(0) yline(`att') yline(`lower95') yline(`upper95')
 
 
 
