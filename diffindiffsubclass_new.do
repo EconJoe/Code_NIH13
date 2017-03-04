@@ -16,6 +16,7 @@ replace tgroup=2 if nih==1 & post==1
 replace tgroup=3 if nih==0 & post==0
 replace tgroup=4 if nih==0 & post==1
 
+
 local backcites "bc_count bc_oa_count"
 local ment "ment_0_both_001 ment_5_both_001 wordcount_both"
 local mesh "count_desc count_qual"
@@ -26,13 +27,31 @@ local meshaug1 "mean_arttot_meshvintage mean_arttot_mc_d_all mean_arttot_cum_mc_
 local spec `"`backcites' `ment' `mesh' `author' `pubtype' `meshaug1'"'
 logit treated `spec'
 predict pr, pr
+predict xb, xb
 gen odds=pr/(1-pr)
 gen lodds=ln(odds)
 
 tempfile hold
 save `hold', replace
 
+
+merge 1:1 pmid using m2_small
+drop _merge
+drop lodds pr
+rename logit lodds
+rename prob pr
+
 save temp, replace
+
+* Trim
+use temp, clear
+keep pmid pr treated
+su pr if treated==1
+local tmax=`r(max)'
+gen trim_controls = (pr>`tmax' & treated==0)
+su pr if treated==0
+local tmin=`r(min)'
+gen trim_treateds = (pr<`tmin' & treated==1)
 
 
 
@@ -182,8 +201,8 @@ gen parmseq=.
 save coeffs_subclass, replace
 
 use nosplit, clear
-gen trimmed=(pr>0.90 | pr<0.10)
-drop if trimmed==1
+*gen trimmed=(pr>0.90 | pr<0.10)
+*drop if trimmed==1
 collapse (mean) pr, by(stratum_global)
 sort pr
 gen stratum=_n
@@ -212,11 +231,11 @@ forvalues i=1/`strata_max' {
 	use `hold' if stratum==`i', clear
 	su ta if stratum==`i'
 	local obs=`r(N)'
-	parmby "reg ta i.nih##i.post i.year `spec' if stratum==`i', cluster(ui4)", norestore
+	parmby "reg ta i.nih##i.post i.year if stratum==`i', cluster(ui4)", norestore
 	*local att=_b[1.nih#1.post]
 	gen obs=`obs'
 	gen stratum=`i'
-	
+	gen controls="No"
 	append using coeffs_subclass
 	save coeffs_subclass, replace
 }
@@ -245,6 +264,55 @@ local lower95=`r(mean)'
 
 twoway (connected estimate stratum), ///
        yline(0) yline(`att') yline(`lower95') yline(`upper95')
+
+
+
+
+
+
+
+	   
+	   
+	   
+	   
+	   
+	   
+	   
+	   
+use nosplit, clear
+gen trimmed=(pr>0.90 | pr<0.10)
+drop if trimmed==1
+collapse (mean) pr, by(stratum_global)
+sort pr
+gen stratum=_n
+twoway(connected pr stratum)
+merge 1:m stratum_global using nosplit
+drop if _merge==2
+drop _merge
+
+
+oneway bc_oa_count tgroup if stratum==1
+oneway bc_oa_count tgroup if stratum==2
+
+
+oneway authortotal tgroup if stratum==1
+oneway authortotal tgroup if stratum==50
+
+
+	gen hold_F=.
+	set more off
+	forvalues i=1/`strata' {
+		qui oneway lodds tgroup if hold_stratum==`i'
+		local F=`r(F)'
+		replace hold_F=`F' if hold_stratum==`i'
+	}
+
+
+reg bc_oa_count i.stratum##i.nih##i.post##i.year
+reg bc_oa_count i.stratum
+
+i.nih##i.post i.year if stratum==1
+reg bc_oa_count i.nih i.post i.year if stratum==1
 
 
 
