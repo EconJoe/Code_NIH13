@@ -1,0 +1,53 @@
+libname nih "/disk/bulkw/staudt/Projects/NIHMandate/NIH14/Data/";
+
+proc contents data=nih.covariates_all_2ndorder;
+run;
+
+proc logistic data=nih.covariates_all_2ndorder;
+ model treated (event='1') = _1-_2;
+ ods output ParameterEstimates = model_treated;
+run;
+
+proc logistic data=nih.covariates_all_2ndorder;
+ model treated (event='1') = _1-_702;
+ output out = m2 p = prob xbeta = logit;
+ ods output ParameterEstimates = model_treated;
+run;
+
+proc logistic data=nih.covariates_all_large_2ndorder;
+ model treated (event='1') = _1-_702;
+ output out = m2_large p = prob xbeta = logit;
+ ods output ParameterEstimates = model_treated_large;
+run;
+
+data work.m2_large_nocov;
+ set work.m2_large;
+ keep pmid logit prob;
+run;
+
+
+proc logistic data=nih.covariates_matched_all_2ndorder;
+ model treated (event='1') = _1-_702;
+ output out = m2_matched p = prob xbeta = logit;
+ ods output ParameterEstimates = model_treated_matched;
+run;
+
+data work.m2_matched_nocov;
+ set work.m2_matched;
+ keep pmid logit prob;
+run;
+
+proc sql;
+select name into :ivars separated by ' '
+from dictionary.columns
+where libname eq 'nih'                          /*library name        */
+  and memname eq 'covariates_all_2ndorder'      /*data set name       */
+  and name ne 'treated'                         /*exlude dep variable */
+  and name ne 'pmid'                            /*exlude ID variable */ ;
+quit;
+
+proc logistic data=nih.covariates_all_2ndorder;
+  model treated (event='1') = &ivars;
+  output out = m2 p = prob xbeta = logit;
+  ods output ParameterEstimates = model_treated;
+run;
