@@ -167,6 +167,11 @@ gen science=(nlmid=="0404511")
 gen nature=(nlmid=="0410462")
 gen scinat=(science==1 | nature==1)
 
+* Inverse hyperbolic sine transformations
+gen ihs_fc_2yr = ln(fc_2yr + sqrt(fc_2yr + 1))
+gen ihs_fc_com_2yr = ln(fc_com_2yr + sqrt(fc_com_2yr + 1))
+gen ihs_fc_dev_2yr = ln(fc_dev_2yr + sqrt(fc_dev_2yr + 1))
+
 compress
 save temp, replace
 
@@ -238,6 +243,7 @@ foreach depvar in `depvars' {
 
 set more off
 local depvars `" "fc_2yr" "fc_com_2yr" "fc_dev_2yr" "'
+local depvars `" "ihs_fc_2yr" "ihs_fc_com_2yr" "ihs_fc_dev_2yr" "'
 foreach depvar in `depvars' {
 
 	local filename "coeffs_forwardcites_reg_`depvar'"
