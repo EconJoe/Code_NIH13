@@ -74,7 +74,7 @@ program define estimation
 		append using `coeffs'; save `coeffs', replace;
 		
 		* Variables that vary WITHIN journal. Always cluster standard errors at journal level.;
-		if ("`depvar'" == "fc_2yr" | "`depvar'" == "fc_com_2yr" | "`depvar'" == "fc_dev_2yr") {;
+		if regexm("`depvar'", "fc_2yr") {;
 		
 			* No Covariates. Journal FEs.;
 			use `hold', clear;
@@ -115,7 +115,7 @@ program define estimation
 			append using `coeffs'; save `coeffs', replace;
 			
 			* Variables that vary WITHIN journal. Always cluster standard errors at journal level.;
-			if ("`depvar'" == "fc_2yr" | "`depvar'" == "fc_com_2yr" | "`depvar'" == "fc_dev_2yr") {;
+			if regexm("`depvar'", "fc_2yr") {;
 			
 				* No Covariates. Journal FEs.;
 				use `hold' if strat==`i', clear;
